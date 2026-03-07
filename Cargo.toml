@@ -24,7 +24,7 @@ disable_device_address_space_merge = false
 is_production = true
 unqualified_approval = false
 memory_region = 2
-program_id = "0x0100AAAABBBBCCCC"
+program_id = "0x420000000000520E"
 
 [package.metadata.nx.nsp.npdm.fs_access_control]
 flags = "0xFFFFFFFFFFFFFFFF"
