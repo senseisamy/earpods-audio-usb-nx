@@ -1,13 +1,15 @@
 #![no_std]
 #![no_main]
 
-#[macro_use]
 extern crate nx;
 extern crate alloc;
 
+use core::num::NonZeroU16;
 use core::panic;
+use alloc::sync::Arc;
 use nx::diag::abort;
 use nx::diag::log;
+use nx::gpu;
 use nx::ipc::client::IClientObject;
 use nx::ipc::sf;
 use nx::ipc::sf::sm::IUserInterfaceClient;
@@ -21,8 +23,11 @@ use nx::service::usb::hs::ClientRootSessionService;
 use nx::service::usb::hs::IClientRootSessionClient;
 use nx::service::usb::hs::InterfaceQueryOutput;
 use nx::svc;
+use nx::sync::RwLock;
 use nx::util;
 use alloc::format;
+
+nx::rrt0_define_module_name!("earpods-audio-usb-nx");
 
 // Using 128KB custom heap
 const CUSTOM_HEAP_LEN: usize = 0x20000;
@@ -35,7 +40,29 @@ pub fn initialize_heap(_hbl_heap: util::PointerAndSize) -> util::PointerAndSize 
 
 #[no_mangle]
 pub fn main() -> Result<()> {
-    diag_log!(log::lm::LmLogger { log::LogSeverity::Trace, false } => "Earpods driver starting...");
+    let mut console = {
+        let gpu_ctx = match gpu::Context::new(
+            gpu::NvDrvServiceKind::Applet,
+            gpu::ViServiceKind::System,
+            0x40000,
+        ) {
+            Ok(ctx) => ctx,
+            Err(e) => panic!("{}", e)
+        };
+        match nx::console::scrollback::ScrollbackConsole::new(
+            Arc::new(RwLock::new(gpu_ctx)),
+            300,
+            NonZeroU16::new(90).unwrap(),
+            true,
+            None,
+            2
+        ) {
+            Ok(console) => console,
+            Err(e) => panic!("{}", e)
+        }
+    };
+
+    console.write("Earpods driver starting...");
 
     // gets the service manager
     let sm_handle = unsafe { svc::connect_to_named_port(c"sm:") }?;
@@ -52,7 +79,8 @@ pub fn main() -> Result<()> {
     let current_process_handle = CopyHandle::from(svc::CURRENT_PROCESS_PSEUDO_HANDLE);
     usb_interface.bind_client_process(current_process_handle)?;
 
-    diag_log!(log::lm::LmLogger { log::LogSeverity::Trace, false } => "Successfully acquired the raw usb:hs session!");
+    //diag_log!(log::lm::LmLogger { log::LogSeverity::Trace, false } => "Successfully acquired the raw usb:hs session!");
+    console.write("Successfully acquired the raw usb:hs session!");
 
     let query_usb_device_filter = sf::usb::hs::DeviceFilter {
         flags: sf::usb::hs::DeviceFilterFlags::from(0),
@@ -66,7 +94,8 @@ pub fn main() -> Result<()> {
             OutMapAliasBuffer::from_mut_array(&mut interfaces),
         )?;
 
-        diag_log!(log::lm::LmLogger { log::LogSeverity::Trace, false } => "{} device(s) found!", total_found);
+        //diag_log!(log::lm::LmLogger { log::LogSeverity::Trace, false } => "{} device(s) found!", total_found);
+        console.write(format!("{} device(s) found!", total_found));
 
         // sleep 1s
         svc::sleep_thread(1_000_000_000)?;
