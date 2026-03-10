@@ -10,4 +10,4 @@ nx = { git = "https://github.com/aarch64-switch-rs/nx", features=["services", "c
 # For help / more information, see https://github.com/aarch64-switch-rs/cargo-nx/wiki
 
 [package.metadata.nx.nro]
-nacp = { default_name = "console-interactive", default_author = "XorTroll", version = "Example" }
+nacp = { default_name = "earpods-audio-usb-nx", default_author = "senseisamy", version = "0.1" }

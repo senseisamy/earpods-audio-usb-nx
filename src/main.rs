@@ -29,13 +29,15 @@ use alloc::format;
 
 nx::rrt0_define_module_name!("earpods-audio-usb-nx");
 
-// Using 128KB custom heap
-const CUSTOM_HEAP_LEN: usize = 0x20000;
-static mut CUSTOM_HEAP: [u8; CUSTOM_HEAP_LEN] = [0; CUSTOM_HEAP_LEN];
-
 #[no_mangle]
-pub fn initialize_heap(_hbl_heap: util::PointerAndSize) -> util::PointerAndSize {
-    unsafe { util::PointerAndSize::new(CUSTOM_HEAP.as_mut_ptr(), CUSTOM_HEAP.len()) }
+pub fn initialize_heap(hbl_heap: util::PointerAndSize) -> util::PointerAndSize {
+    if hbl_heap.is_valid() {
+        hbl_heap
+    } else {
+        let heap_size: usize = 0x10000000;
+        let heap_address = svc::set_heap_size(heap_size).unwrap();
+        util::PointerAndSize::new(heap_address, heap_size)
+    }
 }
 
 #[no_mangle]
@@ -62,8 +64,9 @@ pub fn main() -> Result<()> {
         }
     };
 
-    console.write("Earpods driver starting...");
+    console.write("Earpods driver starting...\n");
 
+    /*
     // gets the service manager
     let sm_handle = unsafe { svc::connect_to_named_port(c"sm:") }?;
     let sm_session = Session::from_handle(sm_handle);
@@ -98,6 +101,11 @@ pub fn main() -> Result<()> {
         console.write(format!("{} device(s) found!", total_found));
 
         // sleep 1s
+        svc::sleep_thread(1_000_000_000)?;
+    }*/
+
+    loop {
+        console.write("a");
         svc::sleep_thread(1_000_000_000)?;
     }
 }
