@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <string.h>
 #include <unistd.h>
 #include <math.h>
 #include <switch.h>
@@ -16,6 +17,8 @@ int main(int argc, char** argv) {
     UsbHsClientIfSession inf_session;
     UsbHsInterfaceFilter filter;
     UsbHsInterface interfaces[8];
+    void* audio_buffer = NULL;
+    void* tx_buffer = NULL;
 
     consoleInit(NULL);
 
@@ -135,25 +138,21 @@ int main(int argc, char** argv) {
         printf("Usb endpoint opened!\n");
         
         // 1. Allocate page-aligned memory for 1 second of audio
-        size_t buffer_size = 0x2F000; // 192,512 bytes
-        void* audio_buffer = aligned_alloc(0x1000, buffer_size); // The switch wants 0x1000 aligned memory
-        if (!audio_buffer) {
+        size_t total_audio_size = 192000;
+        audio_buffer = malloc(total_audio_size);
+        tx_buffer = aligned_alloc(0x1000, 0x1000); // 4096 bytes aligned buffer
+        if (!audio_buffer || !tx_buffer) {
             printf("Memory allocation failed\n");
-            usbHsEpClose(&ep_session);
-            usbHsIfClose(&audio_session);
-            continue;
+            goto abort_audio;
         }
 
-        // Fill it with absolute silence (zeros) for now
-        bzero(audio_buffer, buffer_size);
+        bzero(audio_buffer, total_audio_size);
+        bzero(tx_buffer, 0x1000);
 
-        rc = usbHsEpCreateSmmuSpace(&ep_session, audio_buffer, buffer_size);
+        rc = usbHsEpCreateSmmuSpace(&ep_session, tx_buffer, 0x1000);
         if (R_FAILED(rc)) {
             printf("Failed to create Smmu Space (0x%x)\n", rc);
-            free(audio_buffer);
-            usbHsEpClose(&ep_session);
-            usbHsIfClose(&audio_session);
-            continue;
+            goto abort_audio;
         }
         printf("SMMU memory mapped successfully!\n");
 
@@ -171,29 +170,58 @@ int main(int argc, char** argv) {
         }
 
         printf("Playing beep... :p\n");
-        for (int ms = 0; ms < 1000; ++ms) {
-            u32 transferred = 0;
-            // Get the memory address for this specific millisecond
-            void* packet_ptr = (void*)((uintptr_t)audio_buffer + (ms * 192));
+        u32 urb_sizes[10];
+        for (int j = 0; j < 10; ++j) {
+            urb_sizes[j] = 192;
+        }
 
-            // Push 192 bytes (1ms of audio). 
-            // This function will block until the hardware consumes the packet!
-            rc = usbHsEpPostBuffer(&ep_session, packet_ptr, 192, &transferred);
+        // Audio loop (100 batches of 10ms = 1s)
+        for (int batch = 0; batch < 100; ++batch) {
+            u32 xferId = 0;
+
+            void* packet_ptr = (void*)((uintptr_t)audio_buffer + (batch * 1920));
+            memcpy(tx_buffer, packet_ptr, 1920);
+
+            rc = usbHsEpBatchBufferAsync(&ep_session, tx_buffer, urb_sizes, 10, batch, 0, 0, &xferId);
             if (R_FAILED(rc)) {
-                // Only print the first 5 errors to avoid flooding the console
-                if (ms < 5) {
-                    printf("Packet %d rejected! Error: 0x%x\n", ms, rc);
+                if (batch < 5)
+                    printf("Batch %d rejected! Error: 0x%x\n", batch, rc);
+            } else {
+                if (batch == 0)
+                    printf("Batch 0 accepted! Hardware is playing audio...\n");
+                eventWait(&ep_session.eventXfer, UINT64_MAX);
+                eventClear(&ep_session.eventXfer);
+
+                UsbHsXferReport reports[10];
+                bzero(reports, sizeof(reports));
+                u32 report_count = 0;
+                rc = usbHsEpGetXferReport(&ep_session, reports, 10, &report_count);
+                if (R_FAILED(rc)) {
+                    printf("usbHsEpGetXferReport failed (0x%x)\n", rc);
+                    goto abort_audio;
                 }
-            } else if (ms == 0) {
-                // If the first one works, let us know!
-                printf("Packet 0 accepted by hardware!\n");
+                if (batch == 0) {
+                    for (u32 r = 0; r < report_count; ++r) {
+                        if (R_FAILED(reports[r].res)) {
+                            printf("\n>>> HARDWARE ABORT ON BATCH %d <<<\n", batch);
+                            printf("  Result (res): 0x%x\n", reports[r].res);
+                            // printf("  Requested: %d bytes\n", reports[r].requestedSize);
+                            // printf("  Transferred: %d bytes\n", reports[r].transferredSize);
+                            consoleUpdate(NULL);
+                            //goto abort_audio;
+                        }
+                    }
+                }
             }
         }
+
         printf("Beep finished!\n");
 
-        free(audio_buffer);
-        usbHsEpClose(&ep_session);
-        usbHsIfClose(&audio_session);
+        abort_audio:
+            free(audio_buffer);
+            free(tx_buffer);
+            usbHsEpClose(&ep_session);
+            usbHsIfClose(&audio_session);
     }
 
     exit:
