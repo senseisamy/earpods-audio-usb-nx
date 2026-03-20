@@ -95,6 +95,7 @@ int main(int argc, char** argv) {
                 if (R_FAILED(rc)) {
                     R_LOG("Failed to post audio buffer", rc);
                     printf("at ms=%d\n", ms);
+                    goto abort_audio;
                 }
             }
             printf("Beep finished!\n");

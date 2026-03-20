@@ -72,7 +72,6 @@ Result query_and_acquire_interface(UsbAudioIf_t* device) {
 
 Result open_endpoint(UsbAudioIf_t* device) {
     Result rc;
-    UsbHsClientEpSession ep_session = {0};
     struct usb_endpoint_descriptor ep_desc = {
         .bLength = sizeof(ep_desc),
         .bDescriptorType = USB_DT_ENDPOINT,
@@ -83,7 +82,7 @@ Result open_endpoint(UsbAudioIf_t* device) {
     };
 
     // Open the usb endpoint
-    rc = usbHsIfOpenUsbEp(&device->if_session, &ep_session, 10, 1920, &ep_desc);
+    rc = usbHsIfOpenUsbEp(&device->if_session, &device->ep_session, 10, 1920, &ep_desc);
     if (R_FAILED(rc)) {
         R_LOG("Failed to open the usb endpoint", rc);
         usbHsIfClose(&device->if_session);
