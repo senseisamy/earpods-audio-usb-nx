@@ -81,14 +81,33 @@ Result open_endpoint(UsbAudioIf_t* device) {
     //     .bInterval = 1, // Poll every 1ms
     // };
     // we can actually just copy the endpoint descriptor sent by the earpods
-    struct usb_endpoint_descriptor ep_desc = device->interface.inf.output_endpoint_descs[0];
-    printf("endpoint descritor:\n");
-    printf(" bLength = %d\n", ep_desc.bLength);
-    printf(" bDescriptorType = %d\n", ep_desc.bDescriptorType);
-    printf(" bEndpointAddress = %d\n", ep_desc.bEndpointAddress);
-    printf(" bmAttributes = %d\n", ep_desc.bmAttributes);
-    printf(" wMaxPacketSize = %d\n", ep_desc.wMaxPacketSize);
-    printf(" bInterval = %d\n", ep_desc.bInterval);
+    struct usb_endpoint_descriptor ep_desc = {0};
+    bool found = false;
+    for (int i = 0; i < 15; i++) {
+        struct usb_endpoint_descriptor* desc = &device->interface.inf.output_endpoint_descs[i];
+        if (desc->bLength != 0) {
+            printf("found endpoint descritor:\n");
+            printf(" bLength = %d\n", desc->bLength);
+            printf(" bDescriptorType = %d\n", desc->bDescriptorType);
+            printf(" bEndpointAddress = %d\n", desc->bEndpointAddress);
+            printf(" bmAttributes = %d\n", desc->bmAttributes);
+            printf(" wMaxPacketSize = %d\n", desc->wMaxPacketSize);
+            printf(" bInterval = %d\n", desc->bInterval);
+
+            if ((desc->bmAttributes & 3) == 1) {
+                printf(">>> Verified Isochronous! Claiming this endpoint.\n");
+                ep_desc = *desc;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if (!found) {
+        printf("Failed to find the Isochronous OUT endpoint in the OS array!\n");
+        usbHsIfClose(&device->if_session);
+        return MAKERESULT(Module_Libnx, LibnxError_NotFound); // 0x9
+    }
 
     // Open the usb endpoint
     rc = usbHsIfOpenUsbEp(&device->if_session, &device->ep_session, 10, 1920, &ep_desc);

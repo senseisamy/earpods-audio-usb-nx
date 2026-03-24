@@ -59,7 +59,7 @@ Result audio_loop(UsbAudioIf_t* earpods, void* audio_buffer) {
 
         if (R_FAILED(report.res)) {
             free(tx_buffer);
-            printf("Hardware rejected packet at ms=%d! Error: 0x%x\n", ms, report.res);
+            printf("Hardware rejected packet at ms=%ld! Error: 0x%x\n", report.id, report.res);
             return report.res;
         }
 
