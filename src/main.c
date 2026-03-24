@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
         {
             // Allocate page-aligned memory for 1 second of audio
             u32 data_size = (SAMPLERATE * CHANNELCOUNT * BYTESPERSAMPLE);
-            u32 buffer_size = (data_size + 0xfff) & ~0xfff; // align size to 0x1000
+            u32 buffer_size = ALIGN_UP(data_size, 0x1000); // align size to 0x1000
             audio_buffer = aligned_alloc(0x1000, buffer_size);
             if (!audio_buffer) {
                 rc = MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
@@ -85,19 +85,11 @@ int main(int argc, char** argv) {
             fill_audio_buffer(audio_buffer, 0, data_size, 440);
 
             printf("Playing beep... :p\n");
-            // send the audio to the earpods
-            for (int ms = 0; ms < 1000; ++ms) {
-                u32 transfered = 0;
 
-                void* packet_ptr = (void*)((uintptr_t)audio_buffer + (ms * 192));
-
-                rc = usbHsEpPostBuffer(&earpods.ep_session, packet_ptr, 192, &transfered);
-                if (R_FAILED(rc)) {
-                    R_LOG("Failed to post audio buffer", rc);
-                    printf("at ms=%d\n", ms);
-                    goto abort_audio;
-                }
-            }
+            rc = audio_loop(&earpods, audio_buffer);
+            if (R_FAILED(rc))
+                goto abort_audio;
+    
             printf("Beep finished!\n");
         }
 

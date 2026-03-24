@@ -72,14 +72,23 @@ Result query_and_acquire_interface(UsbAudioIf_t* device) {
 
 Result open_endpoint(UsbAudioIf_t* device) {
     Result rc;
-    struct usb_endpoint_descriptor ep_desc = {
-        .bLength = sizeof(ep_desc),
-        .bDescriptorType = USB_DT_ENDPOINT,
-        .bEndpointAddress = 2, // EP2 : OUT
-        .bmAttributes = 0x0D, // 13 in decimal (Isochronous | Synchronous)  
-        .wMaxPacketSize = 192, // 192 bytes (16-bit audio profile)
-        .bInterval = 1, // Poll every 1ms
-    };
+    // struct usb_endpoint_descriptor ep_desc = {
+    //     .bLength = sizeof(ep_desc),
+    //     .bDescriptorType = USB_DT_ENDPOINT,
+    //     .bEndpointAddress = 2, // EP2 : OUT
+    //     .bmAttributes = 0x0D, // 13 in decimal (Isochronous | Synchronous)  
+    //     .wMaxPacketSize = 192, // 192 bytes (16-bit audio profile)
+    //     .bInterval = 1, // Poll every 1ms
+    // };
+    // we can actually just copy the endpoint descriptor sent by the earpods
+    struct usb_endpoint_descriptor ep_desc = device->interface.inf.output_endpoint_descs[0];
+    printf("endpoint descritor:\n");
+    printf(" bLength = %d\n", ep_desc.bLength);
+    printf(" bDescriptorType = %d\n", ep_desc.bDescriptorType);
+    printf(" bEndpointAddress = %d\n", ep_desc.bEndpointAddress);
+    printf(" bmAttributes = %d\n", ep_desc.bmAttributes);
+    printf(" wMaxPacketSize = %d\n", ep_desc.wMaxPacketSize);
+    printf(" bInterval = %d\n", ep_desc.bInterval);
 
     // Open the usb endpoint
     rc = usbHsIfOpenUsbEp(&device->if_session, &device->ep_session, 10, 1920, &ep_desc);
